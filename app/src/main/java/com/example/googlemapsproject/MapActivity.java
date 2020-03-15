@@ -32,6 +32,12 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.Query;
+import com.google.firebase.database.ValueEventListener;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,6 +55,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private static final String FINE_LOCATION = Manifest.permission.ACCESS_FINE_LOCATION;
     private static final String COARSE_LOCATION = Manifest.permission.ACCESS_COARSE_LOCATION;
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1234;
+    private static final int MAX_BARS = 1000;
 
 
     // widgets
@@ -61,6 +68,12 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private GoogleMap mMap;
     private FusedLocationProviderClient mFusedLocationProviderClient;
 
+    // list that will contain all bars in database with all of their info
+    //private static final Bar [] databaseBars = new Bar [MAX_BARS];
+    private static final ArrayList<Bar> databaseBars = new ArrayList<>();
+
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -71,6 +84,8 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
         getLocationPermission();
 
+        readBarDataFromDatabase();
+
     }
 
     private void init() {
@@ -80,9 +95,9 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
             @Override
             public boolean onEditorAction(TextView textview, int actionID, KeyEvent keyevent) {
                 if (actionID == EditorInfo.IME_ACTION_SEARCH
-                    || actionID == EditorInfo.IME_ACTION_DONE
-                    || keyevent.getAction() == KeyEvent.ACTION_DOWN
-                    || keyevent.getAction() == KeyEvent.KEYCODE_ENTER) {
+                        || actionID == EditorInfo.IME_ACTION_DONE
+                        || keyevent.getAction() == KeyEvent.ACTION_DOWN
+                        || keyevent.getAction() == KeyEvent.KEYCODE_ENTER) {
                     // execute method for searching
                     geoLocate();
 
@@ -104,6 +119,145 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         hideSoftKeyboard();
     }
 
+
+    public void readBarDataFromDatabase() {
+        Log.d(TAG, "readBarDataFromDatabase: geolocating");
+
+        // make reference to Firebase database (Real-time database)
+        DatabaseReference myRef = FirebaseDatabase.getInstance().getReference();
+        Log.d(TAG,"readBarDataFromDatabase: database reference made");
+
+        Query query = myRef;
+
+        ValueEventListener valueEventListener = new ValueEventListener() {
+
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                // make reference to child in database
+                DataSnapshot barSnapShot = dataSnapshot.child("Bar");
+                Log.d(TAG,"readBarDataFromDatabase: data snapshot for Bar acquired");
+
+                // get children of child referenced
+                Iterable<DataSnapshot> barChildren = barSnapShot.getChildren();
+                Log.d(TAG,"readBarDataFromDatabase: children of Bar snapshot acquired");
+
+                // traverse through each child of "Bar"
+                for (DataSnapshot barChild : barChildren) {
+
+                    // bar to be populated with info and added to databaseBars
+                    Bar databaseBar = new Bar();
+
+                    // get name of child (bar name)
+                    String barName = barChild.getKey();
+                    Log.d(TAG,"readBarDataFromDatabase: bar name: " + barName);
+
+                    databaseBar.setBarName(barName);
+
+                    // make reference to child under bar name
+                    DataSnapshot barChildSnapshot = dataSnapshot.child("Bar").child(barName);
+                    Log.d(TAG,"readBarDataFromDatabase: snapshot acquired for " + barName);
+
+                    // get children of bar name referenced
+                    Iterable<DataSnapshot> barNameChildren = barChildSnapshot.getChildren();
+                    Log.d(TAG,"readBarDataFromDatabase: children acquired for " + barName);
+
+                    // traverse through each child/key of bar name
+                    for (DataSnapshot barChildSS : barNameChildren) {
+
+                        // get info of bar name
+                        String barKey = barChildSS.getKey();
+                        Object barKeyVal = barChildSS.getValue();
+                        Log.d(TAG,"readBarDataFromDatabase: bar name: " + barName + ", barKey: " + barKey + ", value: " + barKeyVal);
+
+                        // add values to bar object databaseBar
+                        if (barKey.equals("Address")) {
+                            databaseBar.setAddress(barKeyVal + "");
+                        }
+                        if (barKey.equals("BarCode")) {
+                            databaseBar.setBarCode(barKeyVal + "");
+                        }
+                        if (barKey.equals("Genre")) {
+                            databaseBar.setGenre(barKeyVal + "");
+                        }
+                        if (barKey.equals("HappyHours")) {
+                            // make reference to happy hour child under bar name
+                            DataSnapshot barChildHappyHourSnapshot = dataSnapshot.child("Bar").child(barName).child("HappyHours");
+                            Log.d(TAG,"readBarDataFromDatabase: happy hours snapshot acquired for " + barName);
+
+                            // get children of HappyHours
+                            Iterable<DataSnapshot> happyHours = barChildHappyHourSnapshot.getChildren();
+                            Log.d(TAG,"readBarDataFromDatabase: happy hours acquired for " + barName);
+
+                            // traverse through happy hours of bar
+                            for (DataSnapshot happyHour : happyHours) {
+                                // get info of happy hours
+                                String happyHourDay = happyHour.getKey();
+                                Object happyHourTime = happyHour.getValue();
+
+                                // add happy hours to bar object databaseBar
+                                if (happyHourDay.equals("Monday")) {
+                                    databaseBar.setMondayHappyHours(happyHourTime + "");
+                                }
+                                if (happyHourDay.equals("Tuesday")) {
+                                    databaseBar.setTuesdayHappyHours(happyHourTime + "");
+                                }
+                                if (happyHourDay.equals("Wednesday")) {
+                                    databaseBar.setWednesdayHappyHours(happyHourTime + "");
+                                }
+                                if (happyHourDay.equals("Thursday")) {
+                                    databaseBar.setThursdayHappyHours(happyHourTime + "");
+                                }
+                                if (happyHourDay.equals("Friday")) {
+                                    databaseBar.setFridayHappyHours(happyHourTime + "");
+                                }
+                                if (happyHourDay.equals("Saturday")) {
+                                    databaseBar.setSaturdayHappyHours(happyHourTime + "");
+                                }
+                                if (happyHourDay.equals("Sunday")) {
+                                    databaseBar.setSundayHappyHours(happyHourTime + "");
+                                }
+                            }
+                        }
+                        if (barKey.equals("Website")) {
+                            databaseBar.setWebsite(barKeyVal + "");
+                        }
+                    }
+
+                    // THIS ISNT REALLY ASSIGNING
+                    databaseBars.add(databaseBar);
+
+                }
+
+                // This IS printing bar content
+                for (Bar bar : databaseBars) {
+                    Log.d(TAG, "readBarDataFromDatabase: INSIDE anonymous class: " + bar.toString());
+                }
+
+
+
+
+
+
+
+
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+            }
+
+        };
+        query.addValueEventListener(valueEventListener);
+
+
+        // This is NOT printing bar content
+        for (Bar bar : databaseBars) {
+            Log.d(TAG, "readBarDataFromDatabase: OUTSIDE anonymous class: " + bar.toString());
+        }
+    }
+
+
     private void geoLocate() {
         Log.d(TAG, "geoLocate: geolocating");
 
@@ -124,6 +278,11 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
             Log.d(TAG, "geoLocate: found a location: " + address.toString());
             //Toast.makeText(this, address.toString(), Toast.LENGTH_SHORT).show();
 
+
+            // testing upload
+            DatabaseReference myRef = FirebaseDatabase.getInstance().getReference().child("Test");
+            myRef.push().setValue("worked");
+
             moveCamera(new LatLng(address.getLatitude(), address.getLongitude()), DEFAULT_ZOOM, address.getAddressLine(0));
         }
     }
@@ -133,6 +292,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
      *  task.getResult() IS NULL, FIX!!
      */
     private void getDeviceLocation() {
+
         Log.d(TAG, "getDeviceLocation: getting current location of device.");
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
@@ -171,7 +331,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         }
 
         hideSoftKeyboard();
-        
+
     }
 
     @Override
@@ -209,7 +369,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private void getLocationPermission() {
         Log.d(TAG, "getLocationPermission: getting location permissions.");
         String [] permissions = {Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_COARSE_LOCATION};
+                Manifest.permission.ACCESS_COARSE_LOCATION};
 
         if (ContextCompat.checkSelfPermission(this.getApplicationContext(),FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {

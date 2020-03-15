@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+// added this for Firebase
+apply plugin: 'com.google.gms.google-services'
+
 android {
     compileSdkVersion 29
     buildToolsVersion "29.0.2"
@@ -30,5 +33,25 @@ dependencies {
     // added this for google maps
     implementation 'com.google.android.gms:play-services-maps:17.0.0'
     implementation 'com.google.android.gms:play-services-location:17.0.0'
+
+    // added this for Firebase
+    // add SDKs for any other desired Firebase products
+    // https://firebase.google.com/docs/android/setup#available-libraries
+    implementation 'com.google.firebase:firebase-analytics:17.2.2'
+
+    // added this Firebase
+    implementation 'com.google.firebase:firebase-analytics:17.2.2'
+
+    // added this Firebase
+    implementation 'com.google.firebase:firebase-core:11.6.2'
+
+    // added this Firebase
+    implementation 'com.google.firebase:firebase-auth:19.2.0'
+
+    //added this Firebase
+    implementation 'com.google.firebase:firebase-database:19.2.1'
+
+    //added this Firebase
+    implementation 'com.google.firebase:firebase-firestore:21.4.0'
 
 }
