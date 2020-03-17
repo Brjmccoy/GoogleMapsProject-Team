@@ -21,8 +21,9 @@ public class ListActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private static final int ERROR_DIALOG_REQUEST = 9001;
-    ArrayList<String> events;
+    ArrayList<ListObjects> events;
     ArrayAdapter<String> eventsAdapter;
+    ListObjectsAdapter barAdapter;
     ListView lvEvents;
 
     @Override
@@ -33,6 +34,25 @@ public class ListActivity extends AppCompatActivity {
 
         events = new ArrayList<>();
 
+        events.add(new Header("Happening Now"));
+        events.add(new ListItem("Time " + "4:00" + "-" + "6:30","Bar 1"));
+        events.add(new ListItem("Time " + "4:00" + "-" + "6:30","Bar 1"));
+        events.add(new ListItem("Time " + "4:00" + "-" + "6:30","Bar 1"));
+        events.add(new ListItem("Time " + "4:00" + "-" + "6:30","Bar 1"));
+        events.add(new ListItem("Time " + "4:00" + "-" + "6:30","Bar 1"));
+        events.add(new ListItem("Time " + "4:00" + "-" + "6:30","Bar 1"));
+
+        events.add(new Header("Happening Later"));
+        events.add(new ListItem("Time " + "8:00" + "-" + "11:30","Bar 2"));
+        events.add(new ListItem("Time " + "8:00" + "-" + "11:30","Bar 2"));
+        events.add(new ListItem("Time " + "8:00" + "-" + "11:30","Bar 2"));
+        events.add(new ListItem("Time " + "8:00" + "-" + "11:30","Bar 2"));
+        events.add(new ListItem("Time " + "8:00" + "-" + "11:30","Bar 2"));
+        events.add(new ListItem("Time " + "8:00" + "-" + "11:30","Bar 2"));
+
+
+
+        /*
         events.add("Bar 1");
         events.add("Bar 2");
         events.add("Bar 3");
@@ -55,10 +75,15 @@ public class ListActivity extends AppCompatActivity {
         events.add("dummy data");
         events.add("dummy data");
         events.add("dummy data");
+         */
 
-        eventsAdapter = new ArrayAdapter<>(this,  android.R.layout.simple_list_item_1, events);
+
+
+        //eventsAdapter = new ArrayAdapter<>(this,  android.R.layout.simple_list_item_1, events);
+
+        barAdapter = new ListObjectsAdapter(this, events);
         lvEvents = findViewById(R.id.lvEvents);
-        lvEvents.setAdapter(eventsAdapter);
+        lvEvents.setAdapter(barAdapter);
 
         if (isServicesOK()) {
             init();
