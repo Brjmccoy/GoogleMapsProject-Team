@@ -55,7 +55,8 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private static final String FINE_LOCATION = Manifest.permission.ACCESS_FINE_LOCATION;
     private static final String COARSE_LOCATION = Manifest.permission.ACCESS_COARSE_LOCATION;
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1234;
-    private static final int MAX_BARS = 1000;
+
+    private static final double MAX_BAR_RADIUS = 5.0; // in miles
 
 
     // widgets
@@ -68,9 +69,14 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private GoogleMap mMap;
     private FusedLocationProviderClient mFusedLocationProviderClient;
 
+    private Location currentUserLocation;
+    private boolean barDataHasBeenRead = false;
+
     // list that will contain all bars in database with all of their info
-    //private static final Bar [] databaseBars = new Bar [MAX_BARS];
-    private static final ArrayList<Bar> databaseBars = new ArrayList<>();
+    private ArrayList<Bar> databaseBars = new ArrayList<>();
+
+    // list of bars near user location and are within MAX_BAR_RADIUS
+    private ArrayList<Bar> barsNearUser = new ArrayList<>();
 
 
 
@@ -85,6 +91,16 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         getLocationPermission();
 
         readBarDataFromDatabase();
+        findBarsNearUser();
+
+
+        // This is NOT printing bar content
+        for (Bar bar : databaseBars) {
+            Log.d(TAG, "onCreate: bar info: " + bar.toString());
+        }
+
+        // check size of list
+        Log.d(TAG, "onCreate: bar count: " + databaseBars.size());
 
     }
 
@@ -121,7 +137,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
 
     public void readBarDataFromDatabase() {
-        Log.d(TAG, "readBarDataFromDatabase: geolocating");
+        Log.d(TAG, "readBarDataFromDatabase: initializing");
 
         // make reference to Firebase database (Real-time database)
         DatabaseReference myRef = FirebaseDatabase.getInstance().getReference();
@@ -133,105 +149,195 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                // make reference to child in database
-                DataSnapshot barSnapShot = dataSnapshot.child("Bar");
-                Log.d(TAG,"readBarDataFromDatabase: data snapshot for Bar acquired");
 
-                // get children of child referenced
-                Iterable<DataSnapshot> barChildren = barSnapShot.getChildren();
-                Log.d(TAG,"readBarDataFromDatabase: children of Bar snapshot acquired");
+                // this if statement will occur ONLY ONCE,
+                // this is so that even after switching activities, the same data isnt read again and added to databaseBars
+                if (!barDataHasBeenRead) {
 
-                // traverse through each child of "Bar"
-                for (DataSnapshot barChild : barChildren) {
+                    // make reference to child in database
+                    DataSnapshot barSnapShot = dataSnapshot.child("Bar");
+                    Log.d(TAG,"readBarDataFromDatabase: data snapshot for Bar acquired");
 
-                    // bar to be populated with info and added to databaseBars
-                    Bar databaseBar = new Bar();
+                    // get children of child referenced
+                    Iterable<DataSnapshot> barChildren = barSnapShot.getChildren();
+                    Log.d(TAG,"readBarDataFromDatabase: children of Bar snapshot acquired");
 
-                    // get name of child (bar name)
-                    String barName = barChild.getKey();
-                    Log.d(TAG,"readBarDataFromDatabase: bar name: " + barName);
+                    // traverse through each child of "Bar"
+                    for (DataSnapshot barChild : barChildren) {
 
-                    databaseBar.setBarName(barName);
+                        // bar to be populated with info and added to databaseBars
+                        Bar databaseBar = new Bar();
 
-                    // make reference to child under bar name
-                    DataSnapshot barChildSnapshot = dataSnapshot.child("Bar").child(barName);
-                    Log.d(TAG,"readBarDataFromDatabase: snapshot acquired for " + barName);
+                        // get name of child (bar name)
+                        String barName = barChild.getKey();
+                        Log.d(TAG,"readBarDataFromDatabase: bar name: " + barName);
 
-                    // get children of bar name referenced
-                    Iterable<DataSnapshot> barNameChildren = barChildSnapshot.getChildren();
-                    Log.d(TAG,"readBarDataFromDatabase: children acquired for " + barName);
+                        databaseBar.setBarName(barName);
 
-                    // traverse through each child/key of bar name
-                    for (DataSnapshot barChildSS : barNameChildren) {
+                        // make reference to child under bar name
+                        DataSnapshot barChildSnapshot = dataSnapshot.child("Bar").child(barName);
+                        Log.d(TAG,"readBarDataFromDatabase: snapshot acquired for " + barName);
 
-                        // get info of bar name
-                        String barKey = barChildSS.getKey();
-                        Object barKeyVal = barChildSS.getValue();
-                        Log.d(TAG,"readBarDataFromDatabase: bar name: " + barName + ", barKey: " + barKey + ", value: " + barKeyVal);
+                        // get children of bar name referenced
+                        Iterable<DataSnapshot> barNameChildren = barChildSnapshot.getChildren();
+                        Log.d(TAG,"readBarDataFromDatabase: children acquired for " + barName);
 
-                        // add values to bar object databaseBar
-                        if (barKey.equals("Address")) {
-                            databaseBar.setAddress(barKeyVal + "");
-                        }
-                        if (barKey.equals("BarCode")) {
-                            databaseBar.setBarCode(barKeyVal + "");
-                        }
-                        if (barKey.equals("Genre")) {
-                            databaseBar.setGenre(barKeyVal + "");
-                        }
-                        if (barKey.equals("HappyHours")) {
-                            // make reference to happy hour child under bar name
-                            DataSnapshot barChildHappyHourSnapshot = dataSnapshot.child("Bar").child(barName).child("HappyHours");
-                            Log.d(TAG,"readBarDataFromDatabase: happy hours snapshot acquired for " + barName);
+                        // traverse through each child/key of bar name
+                        for (DataSnapshot barChildSS : barNameChildren) {
 
-                            // get children of HappyHours
-                            Iterable<DataSnapshot> happyHours = barChildHappyHourSnapshot.getChildren();
-                            Log.d(TAG,"readBarDataFromDatabase: happy hours acquired for " + barName);
+                            // get info of bar name
+                            String barKey = barChildSS.getKey();
+                            Object barKeyVal = barChildSS.getValue();
+                            Log.d(TAG,"readBarDataFromDatabase: bar name: " + barName + ", barKey: " + barKey + ", value: " + barKeyVal);
 
-                            // traverse through happy hours of bar
-                            for (DataSnapshot happyHour : happyHours) {
-                                // get info of happy hours
-                                String happyHourDay = happyHour.getKey();
-                                Object happyHourTime = happyHour.getValue();
+                            // add values to bar object databaseBar
+                            if (barKey.equals("Address")) {
+                                databaseBar.setAddress(barKeyVal + "");
+                            }
+                            if (barKey.equals("BarCode")) {
+                                databaseBar.setBarCode(barKeyVal + "");
+                            }
+                            if (barKey.equals("Genre")) {
+                                databaseBar.setGenre(barKeyVal + "");
+                            }
+                            if (barKey.equals("HappyHours")) {
+                                // make reference to happy hour child under bar name
+                                DataSnapshot barChildHappyHourSnapshot = dataSnapshot.child("Bar").child(barName).child("HappyHours");
+                                Log.d(TAG,"readBarDataFromDatabase: happy hours snapshot acquired for " + barName);
 
-                                // add happy hours to bar object databaseBar
-                                if (happyHourDay.equals("Monday")) {
-                                    databaseBar.setMondayHappyHours(happyHourTime + "");
-                                }
-                                if (happyHourDay.equals("Tuesday")) {
-                                    databaseBar.setTuesdayHappyHours(happyHourTime + "");
-                                }
-                                if (happyHourDay.equals("Wednesday")) {
-                                    databaseBar.setWednesdayHappyHours(happyHourTime + "");
-                                }
-                                if (happyHourDay.equals("Thursday")) {
-                                    databaseBar.setThursdayHappyHours(happyHourTime + "");
-                                }
-                                if (happyHourDay.equals("Friday")) {
-                                    databaseBar.setFridayHappyHours(happyHourTime + "");
-                                }
-                                if (happyHourDay.equals("Saturday")) {
-                                    databaseBar.setSaturdayHappyHours(happyHourTime + "");
-                                }
-                                if (happyHourDay.equals("Sunday")) {
-                                    databaseBar.setSundayHappyHours(happyHourTime + "");
+                                // get children of HappyHours
+                                Iterable<DataSnapshot> happyHours = barChildHappyHourSnapshot.getChildren();
+                                Log.d(TAG,"readBarDataFromDatabase: happy hours acquired for " + barName);
+
+                                // traverse through happy hours of bar
+                                for (DataSnapshot happyHour : happyHours) {
+                                    // get info of happy hours
+                                    String happyHourDay = happyHour.getKey();
+                                    Object happyHourTime = happyHour.getValue();
+
+                                    // add happy hours to bar object databaseBar
+                                    if (happyHourDay.equals("Monday")) {
+                                        databaseBar.setMondayHappyHours(happyHourTime + "");
+                                    }
+                                    if (happyHourDay.equals("Tuesday")) {
+                                        databaseBar.setTuesdayHappyHours(happyHourTime + "");
+                                    }
+                                    if (happyHourDay.equals("Wednesday")) {
+                                        databaseBar.setWednesdayHappyHours(happyHourTime + "");
+                                    }
+                                    if (happyHourDay.equals("Thursday")) {
+                                        databaseBar.setThursdayHappyHours(happyHourTime + "");
+                                    }
+                                    if (happyHourDay.equals("Friday")) {
+                                        databaseBar.setFridayHappyHours(happyHourTime + "");
+                                    }
+                                    if (happyHourDay.equals("Saturday")) {
+                                        databaseBar.setSaturdayHappyHours(happyHourTime + "");
+                                    }
+                                    if (happyHourDay.equals("Sunday")) {
+                                        databaseBar.setSundayHappyHours(happyHourTime + "");
+                                    }
                                 }
                             }
+                            if (barKey.equals("Website")) {
+                                databaseBar.setWebsite(barKeyVal + "");
+                            }
                         }
-                        if (barKey.equals("Website")) {
-                            databaseBar.setWebsite(barKeyVal + "");
-                        }
+
+                        // THIS ISNT REALLY ASSIGNING
+                        databaseBars.add(databaseBar);
+
                     }
-
-                    // THIS ISNT REALLY ASSIGNING
-                    databaseBars.add(databaseBar);
-
+                    barDataHasBeenRead = true;
                 }
 
                 // This IS printing bar content
                 for (Bar bar : databaseBars) {
                     Log.d(TAG, "readBarDataFromDatabase: INSIDE anonymous class: " + bar.toString());
                 }
+
+                // check size of list
+                Log.d(TAG, "readBarDataFromDatabase: INSIDE bar count: " + databaseBars.size());
+
+
+
+
+
+
+
+
+
+
+                // vv this section is to find bars near user vv
+                // THIS SECTION WOULD BE IN findBarsNearUser()
+                // THIS METHOD WOULD BE CALLED AFTER readBarDataFromDatabase() FROM OnCreate
+
+                Geocoder geocoder = new Geocoder(MapActivity.this);
+                List<Address> list = new ArrayList<>();
+
+
+
+                // would use currentUserLocation for this instead
+                List<Address> dummyUserLocation = new ArrayList<>();
+                Address dummyUserAddress = null;
+                try {
+                    dummyUserLocation = geocoder.getFromLocationName("1035 N Miami Ave, Miami, USA 33136", 1);
+                }
+                catch (IOException e) {
+                    Log.e(TAG, "findBarsNearUser: IOException: " + e.getMessage());
+                }
+                if (dummyUserLocation.size() > 0) {
+                     dummyUserAddress = dummyUserLocation.get(0);
+                }
+
+
+
+                // traverse through each bar and add ones near user to barsNearUser
+                for (Bar bar : databaseBars) {
+                    try {
+                        list = geocoder.getFromLocationName(bar.getAddress(), 1);
+                    }
+                    catch (IOException e) {
+                        Log.e(TAG, "findBarsNearUser: IOException: " + e.getMessage());
+                    }
+                    if (list.size() > 0) {
+                        Address barAddress = list.get(0);
+
+                        LatLng userLatLng = new LatLng(dummyUserAddress.getLatitude(), dummyUserAddress.getLongitude());
+                        LatLng barLatLng = new LatLng(barAddress.getLatitude(), barAddress.getLongitude());
+
+                        int numberOfResults = 1;
+                        float [] result = new float[numberOfResults];
+                        Location.distanceBetween(userLatLng.latitude, userLatLng.longitude,
+                                                 barLatLng.latitude, barLatLng.longitude, result);
+                        double metersInAMile = 1609.0;
+                        result[0] = result[0] / (float) metersInAMile;
+
+                        if (result[0] < MAX_BAR_RADIUS) {
+                            barsNearUser.add(bar);
+                        }
+                    }
+                }
+
+
+                // display bars on map. this however should be in another separate method
+                for (Bar bar : barsNearUser) {
+                    try {
+                        list = geocoder.getFromLocationName(bar.getAddress(), 1);
+                    }
+                    catch (IOException e) {
+                        Log.e(TAG, "findBarsNearUser: IOException: " + e.getMessage());
+                    }
+                    if (list.size() > 0) {
+                        Address barAddress = list.get(0);
+                        LatLng barLatLng = new LatLng(barAddress.getLatitude(), barAddress.getLongitude());
+
+                        MarkerOptions marker = new MarkerOptions().position(barLatLng).title(bar.getBarName());
+                        mMap.addMarker(marker);
+                    }
+                }
+
+
 
 
 
@@ -257,6 +363,13 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         for (Bar bar : databaseBars) {
             Log.d(TAG, "readBarDataFromDatabase: OUTSIDE anonymous class: " + bar.toString());
         }
+
+        // check size of list
+        Log.d(TAG, "readBarDataFromDatabase: OUTSIDE bar count: " + databaseBars.size());
+    }
+
+    public void findBarsNearUser() {
+
     }
 
 
@@ -306,9 +419,9 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                     public void onComplete(@NonNull Task task) {
                         if (task.isSuccessful() && task.getResult() != null) {
                             Log.d(TAG, "onComplete: found location!");
-                            Location currentLocation = (Location) task.getResult();
+                            currentUserLocation = (Location) task.getResult();
 
-                            moveCamera(new LatLng(currentLocation.getLatitude(),currentLocation.getLongitude()), DEFAULT_ZOOM, "My Location");
+                            moveCamera(new LatLng(currentUserLocation.getLatitude(),currentUserLocation.getLongitude()), DEFAULT_ZOOM, "My Location");
                         }
                         else {
                             Log.d(TAG, "onComplete: current location is null.");
